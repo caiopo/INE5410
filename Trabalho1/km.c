@@ -3,8 +3,8 @@
 #include <string.h>
 #include <math.h>
 
-#define RANDNUM_W 521288629;
-#define RANDNUM_Z 362436069;
+#define RANDNUM_W 521288629
+#define RANDNUM_Z 362436069
 
 unsigned int randum_w = RANDNUM_W;
 unsigned int randum_z = RANDNUM_Z;

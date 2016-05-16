@@ -4,8 +4,8 @@
 #include <math.h>
 #include <pthread.h>
 
-#define RANDNUM_W 521288629;
-#define RANDNUM_Z 362436069;
+#define RANDNUM_W 521288629
+#define RANDNUM_Z 362436069
 
 unsigned int randum_w = RANDNUM_W;
 unsigned int randum_z = RANDNUM_Z;
@@ -39,6 +39,7 @@ int *map;
 int *dirty;
 int too_far;
 int has_changed;
+pthread_t* threads;
 
 float v_distance(vector_t a, vector_t b) {
 	int i;
@@ -50,13 +51,13 @@ float v_distance(vector_t a, vector_t b) {
 
 static void populate2(void* initv) {
 		int init = (int) initv;
-		int j;
+		int i, j;
 		float tmp;
 		float distance;
 		int min = (init * npoints)/nthreads;
 		int max = ((init+1) * npoints)/nthreads;
 
-		for (int i = min; i < max; ++i) {
+		for (i = min; i < max; ++i) {
 			distance = v_distance(centroids[map[i]], data[i]);
 			/* Look for closest cluster. */
 			for (j = 0; j < ncentroids; j++) {
@@ -83,8 +84,6 @@ static void populate() {
 
 	int i;
 
-	pthread_t* threads = malloc(sizeof(pthread_t) * nthreads);
-
 	for (i = 0; i < nthreads; i++) {
 		pthread_create(&threads[i], NULL, populate2, i);
 	}
@@ -94,15 +93,15 @@ static void populate() {
 	}
 }
 
-static void compute_centroids() {
-	int i, j, k;
-	int population;
-	has_changed = 0;
-	/* Compute means. */
-	for (i = 0; i < ncentroids; i++) {
+static void compute_centroids2(void* init) {
+	int min = (((int) init) * ncentroids)/nthreads;
+	int max = ((((int) init)+1) * ncentroids)/nthreads;
+	int i, j, k, population;
+
+	for (i = min; i < max; i++) {
 		if (!dirty[i])
 			continue;
-		memset (centroids[i], 0, sizeof (float) * dimension);
+		memset(centroids[i], 0, sizeof (float) * dimension);
 		/* Compute cluster's mean. */
 		population = 0;
 		for (j = 0; j < npoints; j++) {
@@ -118,7 +117,23 @@ static void compute_centroids() {
 		}
 		has_changed = 1;
 	}
-	memset (dirty, 0, ncentroids * sizeof (int));
+
+	pthread_exit(NULL);
+}
+
+static void compute_centroids() {
+	int i, j, k;
+	has_changed = 0;
+	/* Compute means. */
+	for (i = 0; i < nthreads; i++) {
+		pthread_create(&threads[i], NULL, compute_centroids2, i);
+	}
+
+	for (i = 0; i < nthreads; i++) {
+		pthread_join(threads[i], NULL);
+	}
+
+	memset(dirty, 0, ncentroids * sizeof (int));
 }
 
 int* kmeans() {
@@ -126,15 +141,17 @@ int* kmeans() {
 	too_far = 0;
 	has_changed = 0;
 
-	if (!(map = calloc (npoints, sizeof (int))))
+	if (!(map = calloc(npoints, sizeof (int))))
 		exit(1);
-	if (!(dirty = malloc (ncentroids * sizeof (int))))
+	if (!(dirty = malloc(ncentroids * sizeof (int))))
 		exit(1);
-	if (!(centroids = malloc (ncentroids * sizeof (vector_t))))
+	if (!(centroids = malloc(ncentroids * sizeof (vector_t))))
+		exit(1);
+	if (!(threads = malloc(sizeof(pthread_t) * nthreads)))
 		exit(1);
 
 	for (i = 0; i < ncentroids; i++)
-		centroids[i] = malloc (sizeof (float) * dimension);
+		centroids[i] = malloc (sizeof(float) * dimension);
 	for (i = 0; i < npoints; i++)
 		map[i] = -1;
 	for (i = 0; i < ncentroids; i++) {
@@ -147,7 +164,7 @@ int* kmeans() {
 	/* Map unmapped data points. */
 	for (i = 0; i < npoints; i++)
 		if (map[i] < 0)
-			map[i] = randnum () % ncentroids;
+			map[i] = randnum() % ncentroids;
 
 	do {              /* Cluster data. */
 		populate();
@@ -158,6 +175,7 @@ int* kmeans() {
 		free(centroids[i]);
 	free(centroids);
 	free(dirty);
+	free(threads);
 
 	return map;
 }
