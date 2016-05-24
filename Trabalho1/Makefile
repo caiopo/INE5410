@@ -1,6 +1,6 @@
-CFLAGS=-O3 -lm -lpthread -Wall -Wextra -pedantic
+CFLAGS=-O3 -lm -lpthread
 
-all: km kmp
+all: kmp
 
 clean:
-	rm km kmp
+	rm kmp

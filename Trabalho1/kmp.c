@@ -49,7 +49,7 @@ float v_distance(vector_t a, vector_t b) {
 	return sqrt(distance);
 }
 
-static void populate2(void* initv) {
+static void* populate2(void* initv) {
 		int init = (int) initv;
 		int i, j;
 		float tmp;
@@ -93,7 +93,7 @@ static void populate() {
 	}
 }
 
-static void compute_centroids2(void* init) {
+static void* compute_centroids2(void* init) {
 	int min = (((int) init) * ncentroids)/nthreads;
 	int max = ((((int) init)+1) * ncentroids)/nthreads;
 	int i, j, k, population;
@@ -126,7 +126,7 @@ static void compute_centroids() {
 	has_changed = 0;
 	/* Compute means. */
 	for (i = 0; i < nthreads; i++) {
-		pthread_create(&threads[i], NULL, compute_centroids2, i);
+		pthread_create(&threads[i], NULL, compute_centroids2, (long int) i);
 	}
 
 	for (i = 0; i < nthreads; i++) {
@@ -141,11 +141,11 @@ int* kmeans() {
 	too_far = 0;
 	has_changed = 0;
 
-	if (!(map = calloc(npoints, sizeof (int))))
+	if (!(map = calloc(npoints, sizeof(int))))
 		exit(1);
-	if (!(dirty = malloc(ncentroids * sizeof (int))))
+	if (!(dirty = malloc(ncentroids * sizeof(int))))
 		exit(1);
-	if (!(centroids = malloc(ncentroids * sizeof (vector_t))))
+	if (!(centroids = malloc(ncentroids * sizeof(vector_t))))
 		exit(1);
 	if (!(threads = malloc(sizeof(pthread_t) * nthreads)))
 		exit(1);
