@@ -4,7 +4,6 @@
 #include <string.h>
 #include <math.h>
 
-
 #define RANDNUM_W 521288629
 #define RANDNUM_Z 362436069
 
@@ -48,7 +47,7 @@ float v_distance(vector_t a, vector_t b) {
 	return sqrt(distance);
 }
 
-static void populate(void) {
+static void populate() {
 	int i, j;
 	float tmp;
 	float distance;
@@ -74,7 +73,7 @@ static void populate(void) {
 	}
 }
 
-static void compute_centroids(void) {
+static void compute_centroids() {
 	int i, j, k;
 	int population;
 	has_changed = 0;
@@ -82,7 +81,7 @@ static void compute_centroids(void) {
 	for (i = 0; i < ncentroids; i++) {
 		if (!dirty[i])
 			continue;
-		memset (centroids[i], 0, sizeof (float) * dimension);
+		memset(centroids[i], 0, sizeof(float) * dimension);
 		/* Compute cluster's mean. */
 		population = 0;
 		for (j = 0; j < npoints; j++) {
@@ -101,20 +100,24 @@ static void compute_centroids(void) {
 	memset(dirty, 0, ncentroids * sizeof (int));
 }
 
-int* kmeans(void) {
+static void sync_too_far_has_changed() {
+
+}
+
+int* kmeans() {
 	int i, j, k;
 	too_far = 0;
 	has_changed = 0;
 
-	if (!(map = calloc(npoints, sizeof (int))))
+	if (!(map = calloc(npoints, sizeof(int))))
 		exit(1);
-	if (!(dirty = malloc(ncentroids * sizeof (int))))
+	if (!(dirty = malloc(ncentroids * sizeof(int))))
 		exit(1);
-	if (!(centroids = malloc(ncentroids * sizeof (vector_t))))
+	if (!(centroids = malloc(ncentroids * sizeof(vector_t))))
 		exit(1);
 
 	for (i = 0; i < ncentroids; i++)
-		centroids[i] = malloc(sizeof (float) * dimension);
+		centroids[i] = malloc(sizeof(float) * dimension);
 	for (i = 0; i < npoints; i++)
 		map[i] = -1;
 	for (i = 0; i < ncentroids; i++) {
@@ -132,6 +135,7 @@ int* kmeans(void) {
 	do {              /* Cluster data. */
 		populate();
 		compute_centroids();
+		sync_too_far_has_changed();
 	} while (too_far && has_changed);
 
 	for (i = 0; i < ncentroids; i++)

@@ -4,7 +4,6 @@
 #include <string.h>
 #include <math.h>
 
-
 #define RANDNUM_W 521288629
 #define RANDNUM_Z 362436069
 
@@ -82,7 +81,7 @@ static void compute_centroids(void) {
 	for (i = 0; i < ncentroids; i++) {
 		if (!dirty[i])
 			continue;
-		memset (centroids[i], 0, sizeof (float) * dimension);
+		memset(centroids[i], 0, sizeof(float) * dimension);
 		/* Compute cluster's mean. */
 		population = 0;
 		for (j = 0; j < npoints; j++) {
