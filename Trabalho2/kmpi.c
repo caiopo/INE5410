@@ -18,7 +18,7 @@ void srandnum(int seed) {
 	randum_z = (z) ? z : RANDNUM_Z;
 }
 
-unsigned int randnum(void) {
+unsigned int randnum() {
 	unsigned int u;
 	randum_z = 36969 * (randum_z & 65535) + (randum_z >> 16);
 	randum_w = 18000 * (randum_w & 65535) + (randum_w >> 16);
@@ -40,10 +40,10 @@ int too_far;
 int has_changed;
 
 //for rank 0 to gather everything
-int *globalmap;
 int *globaldirty;
 int globalfar;
 vector_t *globalcentroids;
+int *tmpmap;
 
 int rank, size;
 
@@ -58,39 +58,26 @@ float v_distance(vector_t a, vector_t b) {
 	return sqrt(distance);
 }
 
-// void sync_map() {
-// 	for(int i = 0; i < npoints; ++i) {
-// 		if(map[i] == -1)
-// 			map[i] = 0;
-// 	}
-// 	MPI_Reduce(map, globalmap, npoints, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-// }
-
 void sync_map() {
-	for (int i = 0; i < size; ++i) {
-		int minmax[] = {min, max};
+	int minlocal;
+	int maxlocal;
 
-		MPI_Bcast(minmax, 2, MPI_INT, i, MPI_COMM_WORLD);
+	if(rank != 0) {
+		MPI_Send(map, npoints, MPI_INT, 0, 10, MPI_COMM_WORLD);
+	} else {
+		for(int i = 1; i < size; i++) {
+			MPI_Recv(tmpmap, npoints, MPI_INT, i, 10, MPI_COMM_WORLD, NULL);
+			maxlocal = ((i + 1) * npoints)/size;
+			minlocal = (i*npoints)/size;
 
-		MPI_Bcast(map+minmax[0], minmax[1]-minmax[0], MPI_INT, i, MPI_COMM_WORLD);
+			memcpy(map+minlocal, tmpmap+minlocal,
+				  (maxlocal-minlocal) * sizeof(int));
+		}
 	}
-
-	min = (rank*npoints)/size;
-	max = ((rank + 1) * npoints)/size;
-
+	MPI_Bcast(map, npoints, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
-
-void sync_centroids() {
-	for(int i = 0; i < ncentroids; ++i)
-		MPI_Bcast(globalcentroids[i], dimension, MPI_FLOAT, 0, MPI_COMM_WORLD);
-	for(int i = 0; i < ncentroids; ++i) {
-		for(int k = 0; k < dimension; ++k)
-			centroids[i][k] = globalcentroids[i][k];
-	}
-}
-
-static void populate(void) {
+static void populate() {
 	int i, j;
 	float tmp;
 	float distance;
@@ -122,9 +109,10 @@ static void populate(void) {
 
 	MPI_Allreduce(&too_far, &globalfar, 1, MPI_INT,
 			   	  MPI_BOR, MPI_COMM_WORLD);
+	sync_map();
 }
 
-static void compute_centroids(void) {
+static void compute_centroids() {
 	int i, j, k;
 	int population;
 	int globalpopulation;
@@ -145,46 +133,47 @@ static void compute_centroids(void) {
 				centroids[i][k] += data[j][k];
 			population++;
 		}
-		//NEED TO FIND A WAY TO SUM ALL THE CENTROIDS[i][k] INTO GLOBALCENTROIDS
-		//TO RANK 0 UPDATE IT AND SEND TO EVERYONE
+
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		MPI_Reduce(&population, &globalpopulation, 1, MPI_INT, MPI_SUM,
-				   0, MPI_COMM_WORLD);
-		MPI_Reduce(centroids[i], globalcentroids[i], dimension, MPI_FLOAT,
-				   MPI_SUM, 0, MPI_COMM_WORLD);
+		MPI_Allreduce(&population, &globalpopulation, 1, MPI_INT,
+		 		 	  MPI_SUM, MPI_COMM_WORLD);
 
-		if(rank == 0) {
-			if (globalpopulation > 1) {
-				for (k = 0; k < dimension; k++)
-					globalcentroids[i][k] *= 1.0 / population;
-			}
+		population = globalpopulation;
+
+		MPI_Allreduce(centroids[i], globalcentroids[i], dimension, MPI_FLOAT,
+		 		 	  MPI_SUM, MPI_COMM_WORLD);
+
+		memcpy(centroids[i], globalcentroids[i], sizeof(float) * dimension);
+
+		if (population > 1) {
+			for (k = 0; k < dimension; k++)
+				centroids[i][k] *= 1.0 / population;
 		}
+
 		has_changed = 1;
+
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
-	sync_centroids();
-	MPI_Barrier(MPI_COMM_WORLD);
 	memset (dirty, 0, ncentroids * sizeof (int));
 	memset (globaldirty, 0, ncentroids * sizeof (int));
 }
 
-int* kmeans(void) {
+int* kmeans() {
 	int i, j, k;
 	too_far = 0;
 	has_changed = 0;
 
 	if (!(map = calloc (npoints, sizeof (int))))
 		exit(1);
-	if (!(globalmap = calloc (npoints, sizeof (int))))
-		exit(1);
 	if (!(dirty = malloc (ncentroids * sizeof (int))))
 		exit(1);
 	if (!(centroids = malloc (ncentroids * sizeof (vector_t))))
 		exit(1);
+	if (!(globalcentroids = malloc (ncentroids * sizeof (vector_t))))
+		exit(1);
 	if (!(globaldirty = malloc (ncentroids * sizeof (int))))
 		exit(1);
-	if (!(globalcentroids = malloc (ncentroids * sizeof (vector_t))))
+	if (!(tmpmap = malloc (npoints * sizeof (int))))
 		exit(1);
 
 	for (i = 0; i < ncentroids; i++) {
@@ -210,7 +199,6 @@ int* kmeans(void) {
 		populate();
 		compute_centroids();
 	} while (globalfar && has_changed);
-	sync_map();
 
 	for (i = 0; i < ncentroids; i++) {
 		free(centroids[i]);
@@ -220,6 +208,7 @@ int* kmeans(void) {
 	free(globalcentroids);
 	free(dirty);
 	free(globaldirty);
+	free(tmpmap);
 
 	return map;
 }
