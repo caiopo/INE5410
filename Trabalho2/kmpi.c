@@ -109,7 +109,6 @@ static void populate() {
 
 	MPI_Allreduce(&too_far, &globalfar, 1, MPI_INT,
 			   	  MPI_BOR, MPI_COMM_WORLD);
-	sync_map();
 }
 
 static void compute_centroids() {
@@ -199,6 +198,7 @@ int* kmeans() {
 		populate();
 		compute_centroids();
 	} while (globalfar && has_changed);
+	sync_map();
 
 	for (i = 0; i < ncentroids; i++) {
 		free(centroids[i]);
